@@ -15,4 +15,12 @@ typedef struct speed_s
     float y;
 } speed_t;
 
+typedef struct Gamemap_s
+{
+    int16_t x;
+    int16_t y;
+    uint16_t color;
+    /* data */
+} Gamemap_t;
+
 #endif
