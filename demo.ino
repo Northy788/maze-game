@@ -19,56 +19,62 @@
 #define BG M5.Speaker
 #define M5STACK_FIRE_NEO_NUM_LEDS 10
 #define M5STACK_FIRE_NEO_DATA_PIN 15
+//----------------------------------------------------------------------------
+// Fuction Declaration
 
-// fuction declaration
-void read_gyro(void);
-void playerMove(void);
-void play_bg_music(void);
-void waiting_page(void);
-void select_map_page(void);
-void rgb_on(uint32_t c);
-void wifi_connect(void);
-void firebase_connect(void);
-//
+void read_gyro(void);        // read gyro-sensor
+void playerMove(void);       // เmove player after read gyro-sensor if value change and player not collision with the wall
+void play_bg_music(void);    // play music background (Can you hear the music by Ludwig Göransson from Oppenheimer)
+void waiting_page(void);     // show waiting screen while status is "WAIT"
+void select_map_page(void);  // show select map screen when Flutter App send "CONNECTED" to M5stack Device
+void rgb_on(uint32_t c);     // turn on RGB LED and change color by parameter -> uint32_t c <-
+void wifi_connect(void);     // connect wifi
+void firebase_connect(void); // connect firebase
+
+// End Fuction Declaration
+//-------------------------------------------------------------------------------
 /*
---------- LCD width x height = 320 x 240 px
----------- gyro-sensor use gy->X-AIS , gz->Y-AXIS
+            Details
+ LCD width x height = 320 x 240 px
+ gyro-sensor use gy->X-AIS , gz->Y-AXIS
 */
 
+//-------------------------------------------------------------------
 // Global Variable
-// RGB bar
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(M5STACK_FIRE_NEO_NUM_LEDS, M5STACK_FIRE_NEO_DATA_PIN, NEO_GRB + NEO_KHZ800);
+
 unsigned long prev_time = 0;       // check time update gyro and player positon
-unsigned long screen_time = 0;     // check screen change frame
-position_t playerPos = {160, 120}; // player position
+unsigned long screen_time = 0;     // check timr to change screen frame
+position_t playerPos = {160, 120}; // player start position
 speed_t playerSpeed = {1.5, 1.5};  // player move pixel/time
-uint8_t player_radius = 5;         // player size circle
-uint8_t point = 0;
-int note_index = 0;              // index to run music note
-unsigned long note_duration = 0; // check time chang note
-uint8_t vol = 2;
-uint8_t map_number = 0;
-uint8_t play_state = 0;
+uint8_t player_radius = 5;         // player radius to draw player in circle
+uint8_t point = 0;                 // screen frame have 3 frame (draw ... while waiting)
+int note_index = 0;                // index to run music note array
+unsigned long note_duration = 0;   // check time chang note
+uint8_t vol = 2;                   // Speaker Volume
+uint8_t map_number = 0;            // map number -> 1(easy) 2(easy) 3(medium) 4(hard) 5(hard)
+uint8_t play_state = 0;            // play_state change to true when status is "PLAY" and change to false when collision with end path of maze
 /*
-  4 status
-  1. wait for connect mobile device
-  2. connected -> selected map/mode
-  3. play
-  4. end -> selected map/mode
+  3 status
+  1. "WAIT" for connect mobile device
+  2. "CONNECTED" -> selected map
+  3. after select map from Flutter app status change to "PLAY"
+
+  after end game status change from "PLAY" to "CONNECTED"
 */
-String status = "WAIT";
-const char *wifi_ssid = "Pi";               // wifi password
-const char *wifi_password = "hehepassword"; // wifi password
-const char *API_KEY = "AIzaSyBgy3jxmfAm9tbQf5lv8SuGFygwmKuSAew";
-const char *DATABASE_URL = "https://maze-game-demo-cbd12-default-rtdb.asia-southeast1.firebasedatabase.app";
-String device_name = "MAZE-GAME-Device";
-String database_path = "";
-uint8_t isAuthen = 0;
-String fuid = "";
-FirebaseData fbdo;
+String status = "WAIT";                                                                                      // defualt status is "WAIT"
+const char *wifi_ssid = "Pi";                                                                                // wifi password
+const char *wifi_password = "hehepassword";                                                                  // wifi password
+const char *API_KEY = "AIzaSyBgy3jxmfAm9tbQf5lv8SuGFygwmKuSAew";                                             // Fisebase API key
+const char *DATABASE_URL = "https://maze-game-demo-cbd12-default-rtdb.asia-southeast1.firebasedatabase.app"; // Firebase url realtime database
+String device_name = "MAZE-GAME-Device";                                                                     // device name
+String database_path = "";                                                                                   // data path
+uint8_t isAuthen = 0;                                                                                        // status to check firebase is connected
+String fuid = "";                                                                                            // store firebase uid
+FirebaseData fbdo;                                                                                           // firebase data object read/write data from this object
 FirebaseAuth auth;
 FirebaseConfig config;
 
+// MUSIC NOTE for background song play during play the game (Music name : Can you hear the music by Ludwig Göransson)
 uint16_t bg_music_note[144] = {
     NOTE_B1, NOTE_C2, NOTE_D2, NOTE_F2, NOTE_G2, NOTE_E2, // 1
     NOTE_C2, NOTE_D2, NOTE_E2, NOTE_G2, NOTE_B2, NOTE_F2, // 2
@@ -87,16 +93,18 @@ uint16_t bg_music_note[144] = {
     NOTE_D3, NOTE_C3, NOTE_B2, NOTE_G2, NOTE_E2, NOTE_G2, // 15
     NOTE_C3, NOTE_B2, NOTE_G2, NOTE_E2, NOTE_D2, NOTE_C2, // 16
 
-    NOTE_B1, NOTE_C2, NOTE_D2, NOTE_F2, NOTE_G2, NOTE_E2, // 1
-    NOTE_C2, NOTE_D2, NOTE_E2, NOTE_G2, NOTE_B2, NOTE_F2, // 2
-    NOTE_D2, NOTE_E2, NOTE_F2, NOTE_B2, NOTE_C3, NOTE_G2, // 3
-    NOTE_E2, NOTE_F2, NOTE_G2, NOTE_C3, NOTE_D3, NOTE_G2, // 4
-    NOTE_F2, NOTE_G2, NOTE_B2, NOTE_D3, NOTE_E3, NOTE_C3, // 5
-    NOTE_B2, NOTE_C3, NOTE_D3, NOTE_F3, NOTE_G3, NOTE_E3, // 6
-    NOTE_C3, NOTE_D3, NOTE_E3, NOTE_G3, NOTE_B3, NOTE_F3, // 7
-    NOTE_D3, NOTE_E3, NOTE_F3, NOTE_B3, NOTE_C4, NOTE_G3  // 8
+    NOTE_B1, NOTE_C2, NOTE_D2, NOTE_F2, NOTE_G2, NOTE_E2, // 17
+    NOTE_C2, NOTE_D2, NOTE_E2, NOTE_G2, NOTE_B2, NOTE_F2, // 18
+    NOTE_D2, NOTE_E2, NOTE_F2, NOTE_B2, NOTE_C3, NOTE_G2, // 19
+    NOTE_E2, NOTE_F2, NOTE_G2, NOTE_C3, NOTE_D3, NOTE_G2, // 20
+    NOTE_F2, NOTE_G2, NOTE_B2, NOTE_D3, NOTE_E3, NOTE_C3, // 21
+    NOTE_B2, NOTE_C3, NOTE_D3, NOTE_F3, NOTE_G3, NOTE_E3, // 22
+    NOTE_C3, NOTE_D3, NOTE_E3, NOTE_G3, NOTE_B3, NOTE_F3, // 23
+    NOTE_D3, NOTE_E3, NOTE_F3, NOTE_B3, NOTE_C4, NOTE_G3  // 24
 };
-int duration[] = {
+
+// duration of each note (ms)
+int duration[144] = {
     400, 400, 400, 400, 400, 400, // 1
     400, 400, 400, 400, 400, 400, // 2
     400, 400, 400, 400, 400, 400, // 3
@@ -114,73 +122,28 @@ int duration[] = {
     300, 300, 300, 300, 300, 300, // 15
     300, 300, 300, 300, 300, 300, // 16
 
-    333, 333, 333, 333, 333, 333, // 1
-    333, 333, 333, 333, 333, 333, // 2
-    333, 333, 333, 333, 333, 333, // 3
-    324, 324, 324, 324, 324, 324, // 4
-    330, 330, 330, 330, 330, 330, // 5
-    331, 331, 331, 331, 331, 331, // 6
-    331, 331, 331, 331, 331, 331, // 7
-    331, 331, 331, 331, 331, 331  // 8
+    333, 333, 333, 333, 333, 333, // 17
+    333, 333, 333, 333, 333, 333, // 18
+    333, 333, 333, 333, 333, 333, // 19
+    324, 324, 324, 324, 324, 324, // 20
+    330, 330, 330, 330, 330, 330, // 21
+    331, 331, 331, 331, 331, 331, // 22
+    331, 331, 331, 331, 331, 331, // 23
+    331, 331, 331, 331, 331, 331  // 24
 };
+/*
+ Maze map size 15 x 10 (put 10 x 15 because it easy to read)
 
-// map
-// uint8_t maze_map1[10][15] = {
-//     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-//     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-//     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
-//     {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-//     {1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1},
-//     {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1},
-//     {1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1},
-//     {1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1},
-//     {1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1},
-//     {1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1}};
-// uint8_t maze_map2[10][15] = {
-//     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-//     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-//     {1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1},
-//     {1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1},
-//     {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1},
-//     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
-//     {1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1},
-//     {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1},
-//     {1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
-//     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
-// uint8_t maze_map3[10][15] = {
-//     {0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0},
-//     {1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1},
-//     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-//     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
-//     {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-//     {1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1},
-//     {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1},
-//     {1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
-//     {1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1},
-//     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1}};
-// uint8_t maze_map4[10][15] = {
-//     {0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-//     {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1},
-//     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1},
-//     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1},
-//     {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
-//     {1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0},
-//     {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1},
-//     {1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1},
-//     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1},
-//     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1}};
-// uint8_t maze_map5[10][15] = {
-//     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-//     {1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1},
-//     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1},
-//     {1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1},
-//     {1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1},
-//     {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
-//     {1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1},
-//     {1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1},
-//     {1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 0, 1},
-//     {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1}};
+ MAP 1 : EASY
+ MAP 2 : EASY
+ MAP 3 : MEDIUM
+ MAP 4 : HARD
+ MAP 5 : HARD
 
+ 0 -> path
+ 1 -> wall
+ 2 -> exit point (end map)
+*/
 uint8_t maze_maps[5][10][15] = {
     {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
      {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
@@ -237,59 +200,63 @@ uint8_t maze_maps[5][10][15] = {
      {1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 0, 1},
      {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1}}};
 
-// uint8_t maze_maps[5][10][15] = {maze_map1, maze_map2, maze_map3, maze_map4, maze_map5};
-// end map
-
 // End Global Variable
+//----------------------------------------------------------------------------
+// Sensor and Componet Variable
 
-// Sensor Variable
-MPU9250 mpu; // gryo-sensor
+MPU9250 mpu;                                                                                                              // gryo-sensor
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(M5STACK_FIRE_NEO_NUM_LEDS, M5STACK_FIRE_NEO_DATA_PIN, NEO_GRB + NEO_KHZ800); // RGB bar
 
 // End Sensor Variable
+//----------------------------------------------------------------------------
 
+// Setup
 void setup()
 {
   Serial.begin(115200);
-  M5.begin();     // M5stack begin
-  M5.Lcd.begin(); // Lcd Begin
-  M5.Speaker.begin();
-  M5.Speaker.setVolume(vol);
-  Wire.begin();
+  M5.begin();                                        // M5stack begin
+  M5.Lcd.begin();                                    // Lcd Begin
+  M5.Speaker.begin();                                // Speaker begin
+  M5.Speaker.setVolume(vol);                         // set default speaker volume
+  Wire.begin();                                      //
   mpu.initMPU9250();                                 // init gyro-sensor
   mpu.calibrateMPU9250(mpu.gyroBias, mpu.accelBias); // calibrate gyro-sensor valu
-  delay(1000);
-  pixels.begin();
-  wifi_connect();
-  firebase_connect();
-  send_default_status();
-  note_duration = millis(); // prepare to start music
-  screen_time = millis();
+  delay(1000);                                       // delay 1 second before setup wifi connect
+  pixels.begin();                                    // RGB bar begin
+  wifi_connect();                                    // connect wifi
+  firebase_connect();                                // connect firebase
+  send_default_status();                             // send defualt status ("WAIT") to realtime database
+  note_duration = millis();                          // prepare to start music
+  screen_time = millis();                            // prepare to start waiting screen
 }
+// End Setup
+//------------------------------------------------------------------------------
 
+// Main program
 void loop()
 {
   M5.update();
-  BG.update(); // Update speaker
-  while (status == "WAIT")
+  BG.update();             // Update speaker
+  while (status == "WAIT") // while status is "WAIT" show waiting screen
   {
     waiting_page();
   }
-  while (status == "CONNECTED" || play_state == 0)
+  while (status == "CONNECTED" || play_state == 0) // while status is "CONNECTED" and Flutter App has not send map number yet show select map screen
   {
     select_map_page();
   }
-  if (status == "PLAY")
+  if (status == "PLAY") // if status is play enter to the game
   {
-    MAP.clear();
-    draw_maze_map(map_number - 1);
-    playerPos.x = 160;
-    playerPos.y = 120;
-    note_index = 0;
-    PLAYER.fillCircle((int)playerPos.x, (int)playerPos.y, player_radius, WHITE);
-    BG.begin();
+    MAP.clear();                                                                 // clear screen
+    draw_maze_map(map_number - 1);                                               // draw map according to map number that receive from Flutter app
+    playerPos.x = 160;                                                           // set start position x
+    playerPos.y = 120;                                                           // set start position y
+    note_index = 0;                                                              // set start note index
+    PLAYER.fillCircle((int)playerPos.x, (int)playerPos.y, player_radius, WHITE); // draw player
+    BG.begin();                                                                  // speaker ready
     while (play_state)
     {
-      play_bg_music();
+      play_bg_music();                // play bg music
       if (millis() - prev_time >= 16) // read gyro every 16 ms => 60Hz
       {
         read_gyro();  // read x and y  axis on gyro-sensor
@@ -297,13 +264,16 @@ void loop()
         prev_time = millis();
       }
     }
-    MAP.clear();
-    SCREEN.drawString("Good job!", 120, 100, 2);
-    status = "CONNECTED";
-    send_default_status();
-    BG.end();
+    MAP.clear();                                 // clear screen
+    SCREEN.drawString("Good job!", 120, 100, 2); // show "Good job!" message
+    status = "CONNECTED";                        // change status to "CONNECTED"
+    send_default_status();                       // update status to realtime database
+    BG.end();                                    // stop speaker
   }
 }
+// END main program
+//-----------------------------------------------------------------------------
+
 // sensor read
 void read_gyro()
 {
