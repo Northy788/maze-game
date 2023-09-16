@@ -1,20 +1,34 @@
 #include <M5Stack.h>
 #include "utility/MPU9250.h"
 #include "player.h"
-#include <stdlib.h>
+#include <FirebaseESP32.h>
+#include <WiFi.h>
+#include <Adafruit_NeoPixel.h>
+#include <Arduino.h>
 
 #define TONE_USE_INT
 #define TONE_PITCH 440
 #include <TonePitch.h>
 
+#include "addons/TokenHelper.h" //Provide the token generation process info.
+#include "addons/RTDBHelper.h"  //Provide the RTDB payload printing info and other helper functions.
+
+#define SCREEN M5.Lcd
 #define PLAYER M5.Lcd
 #define MAP M5.Lcd
 #define BG M5.Speaker
+#define M5STACK_FIRE_NEO_NUM_LEDS 10
+#define M5STACK_FIRE_NEO_DATA_PIN 15
 
-// fuction decle
+// fuction declaration
 void read_gyro(void);
 void playerMove(void);
 void play_bg_music(void);
+void waiting_page(void);
+void select_map_page(void);
+void rgb_on(uint32_t c);
+void wifi_connect(void);
+void firebase_connect(void);
 //
 /*
 --------- LCD width x height = 320 x 240 px
@@ -22,12 +36,38 @@ void play_bg_music(void);
 */
 
 // Global Variable
-unsigned long prev_time = 0;     // check time update gyro and player positon
-position_t playerPos = {10, 10}; // player position
-speed_t playerSpeed = {1, 1};    // player move pixel/time
-uint8_t player_radius = 5;       // player size circle
+// RGB bar
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(M5STACK_FIRE_NEO_NUM_LEDS, M5STACK_FIRE_NEO_DATA_PIN, NEO_GRB + NEO_KHZ800);
+unsigned long prev_time = 0;       // check time update gyro and player positon
+unsigned long screen_time = 0;     // check screen change frame
+position_t playerPos = {160, 120}; // player position
+speed_t playerSpeed = {1, 1};      // player move pixel/time
+uint8_t player_radius = 5;         // player size circle
+uint8_t point = 0;
 int note_index = 0;              // index to run music note
 unsigned long note_duration = 0; // check time chang note
+uint8_t vol = 2;
+uint8_t song_state = 1;
+/*
+  4 status
+  1. wait for connect mobile device
+  2. connected -> selected map/mode
+  3. play
+  4. end -> selected map/mode
+*/
+String status = "WAIT";
+const char *wifi_ssid = "Pi";               // wifi password
+const char *wifi_password = "hehepassword"; // wifi password
+const char *API_KEY = "AIzaSyBgy3jxmfAm9tbQf5lv8SuGFygwmKuSAew";
+const char *DATABASE_URL = "https://maze-game-demo-cbd12-default-rtdb.asia-southeast1.firebasedatabase.app";
+String device_name = "MAZE-GAME-Device";
+String database_path = "";
+uint8_t isAuthen = 0;
+String fuid = "";
+FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config;
+
 uint16_t bg_music_note[144] = {
     NOTE_B1, NOTE_C2, NOTE_D2, NOTE_F2, NOTE_G2, NOTE_E2, // 1
     NOTE_C2, NOTE_D2, NOTE_E2, NOTE_G2, NOTE_B2, NOTE_F2, // 2
@@ -83,6 +123,66 @@ int duration[] = {
     331, 331, 331, 331, 331, 331  // 8
 };
 
+// map
+uint8_t maze_map1[10][15] = {
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+    {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    {1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1},
+    {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1},
+    {1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+    {1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1},
+    {1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1}};
+uint8_t maze_map2[10][15] = {
+    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    {1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1},
+    {1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+    {1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+uint8_t maze_map3[10][15] = {
+    {0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0},
+    {1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+    {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    {1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1},
+    {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+    {1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1}};
+uint8_t maze_map4[10][15] = {
+    {0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1},
+    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1},
+    {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+    {1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0},
+    {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1},
+    {1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1}};
+uint8_t maze_map5[10][15] = {
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+    {1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1},
+    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1},
+    {1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1},
+    {1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1},
+    {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+    {1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+    {1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1},
+    {1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1}};
+
+uint8_t maze_maps[5][10][15] = {maze_map1, maze_map2, maze_map3, maze_map4, maze_map5};
+// end map
+
 // End Global Variable
 
 // Sensor Variable
@@ -96,25 +196,48 @@ void setup()
   M5.begin();     // M5stack begin
   M5.Lcd.begin(); // Lcd Begin
   M5.Speaker.begin();
-
+  M5.Speaker.setVolume(vol);
   Wire.begin();
   mpu.initMPU9250();                                 // init gyro-sensor
   mpu.calibrateMPU9250(mpu.gyroBias, mpu.accelBias); // calibrate gyro-sensor valu
-
+  delay(1000);
+  pixels.begin();
+  // wifi_connect();
+  // firebase_connect();
+  // send_default_status();
   note_duration = millis(); // prepare to start music
+  screen_time = millis();
 }
 
 void loop()
 {
+  M5.update();
   BG.update(); // Update speaker
   play_bg_music();
+  if (status == "WAIT")
+  {
+    waiting_page();
+  }
+  else if (status == "CONNECTED")
+  {
+    select_map_page();
+  }
+  else if (status == "PLAY")
+  {
+    BG.end();
+    draw_maze_map();
+    PLAYER.fillCircle((int)playerPos.x, (int)playerPos.y, player_radius, WHITE);
+    while (1)
+    {
 
-  // if (millis() - prev_time >= 16) // read gyro every 16 ms => 60Hz
-  // {
-  //   read_gyro();  // read x and y  axis on gyro-sensor
-  //   playerMove(); // if not collision move TARS
-  //   prev_time = millis();
-  // }
+      if (millis() - prev_time >= 16) // read gyro every 16 ms => 60Hz
+      {
+        read_gyro();  // read x and y  axis on gyro-sensor
+        playerMove(); // if not collision move TARS
+        prev_time = millis();
+      }
+    }
+  }
 }
 // sensor read
 void read_gyro()
@@ -226,6 +349,8 @@ int isCollision()
 //  draw map object at pos-x pos-y
 void drawShelf(uint16_t x, uint16_t y)
 {
+  x *= 21;
+  y *= 23;
   int index = 0; // index of book shelf array
   // book shelf bit map 21 x 23 (width x height)
   uint16_t book_shelf[483] = {0x99E2, 0x99E2, 0x99E2, 0x99E2, 0x99E2, 0x99E2, 0x99E2, 0x99E2, 0x99E2, 0x99E2,
@@ -306,5 +431,114 @@ void play_bg_music()
 // end about music
 
 // about simple page
+void waiting_page()
+{
+  String str = "Connecting";
+  if (millis() - screen_time >= 400)
+  {
+    SCREEN.drawString(str, 120, 100, 2);
+    screen_time = millis();
+    if (point < 3)
+    {
+      SCREEN.drawChar('.', 190 + (point * 5), 100, 2);
+      point++;
+    }
+    else
+    {
+      SCREEN.fillRect(190, 100, 30, 20, BLACK);
+      point = 0;
+    }
+  }
+}
 
+void select_map_page()
+{
+  String str = "Selecte map";
+  if (millis() - screen_time >= 400)
+  {
+    SCREEN.drawString(str, 120, 100, 2);
+    screen_time = millis();
+    if (point < 3)
+    {
+      SCREEN.drawChar('.', 200 + (point * 5), 100, 2);
+      point++;
+    }
+    else
+    {
+      SCREEN.fillRect(200, 100, 30, 20, BLACK);
+      point = 0;
+    }
+  }
+}
 // end about simple page
+
+void rgb_on(uint32_t c)
+{
+  for (int i = 0; i < 9; i++)
+  {
+    pixels.setPixelColor(i, c);
+    pixels.show();
+  }
+}
+
+void wifi_connect(void)
+{
+  WiFi.mode(WIFI_STA);                  // Wifi station mode
+  WiFi.begin(wifi_ssid, wifi_password); // Wifi connecting 2.4 Ghz only
+  rgb_on(pixels.Color(255, 0, 0));      // not connect display red colr
+  while (WiFi.status() != WL_CONNECTED)
+  {
+  }                                  //
+  rgb_on(pixels.Color(255, 128, 0)); // connected wifi display yellow color
+}
+
+void firebase_connect(void)
+{
+  config.api_key = API_KEY;
+  config.database_url = DATABASE_URL;
+  Firebase.reconnectWiFi(true);
+  if (Firebase.signUp(&config, &auth, "", ""))
+  { // anonymus mode
+    isAuthen = 1;
+    database_path += "/" + device_name;
+    fuid = auth.token.uid.c_str();
+    rgb_on(pixels.Color(128, 255, 0));
+  }
+  else
+  {
+    config.signer.signupError.message.c_str();
+    isAuthen = 0;
+    rgb_on(pixels.Color(0, 0, 255));
+  }
+  config.token_status_callback = tokenStatusCallback;
+  Firebase.begin(&config, &auth);
+}
+
+void send_default_status()
+{
+  if (isAuthen && Firebase.ready())
+  {
+    String node = database_path + "/status";
+    if (Firebase.set(fbdo, node.c_str(), status))
+    {
+      rgb_on(pixels.Color(128, 255, 0));
+    }
+    else
+    {
+      rgb_on(pixels.Color(255, 128, 0));
+    }
+  }
+}
+
+void draw_maze_map()
+{
+
+  for (int y = 0; y < 10; y++)
+  {
+    for (int x = 0; x < 15; x++)
+    {
+      if (maze_map2[y][x])
+        drawShelf(x, y);
+    }
+  }
+}
