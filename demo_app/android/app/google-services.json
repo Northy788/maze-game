@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "559868633659",
+    "firebase_url": "https://maze-game-demo-cbd12-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "maze-game-demo-cbd12",
+    "storage_bucket": "maze-game-demo-cbd12.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:559868633659:android:9f9aa6c3a007e9d53d321e",
+        "android_client_info": {
+          "package_name": "com.example.demo_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBDChp3SUyu9Wydkoa7WCFlQVBe_hkDnoE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
