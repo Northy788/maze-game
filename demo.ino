@@ -41,13 +41,14 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(M5STACK_FIRE_NEO_NUM_LEDS, M5STACK_
 unsigned long prev_time = 0;       // check time update gyro and player positon
 unsigned long screen_time = 0;     // check screen change frame
 position_t playerPos = {160, 120}; // player position
-speed_t playerSpeed = {1, 1};      // player move pixel/time
+speed_t playerSpeed = {1.5, 1.5};  // player move pixel/time
 uint8_t player_radius = 5;         // player size circle
 uint8_t point = 0;
 int note_index = 0;              // index to run music note
 unsigned long note_duration = 0; // check time chang note
 uint8_t vol = 2;
-uint8_t song_state = 1;
+uint8_t map_number = 0;
+uint8_t play_state = 0;
 /*
   4 status
   1. wait for connect mobile device
@@ -124,63 +125,119 @@ int duration[] = {
 };
 
 // map
-uint8_t maze_map1[10][15] = {
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
-    {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1},
-    {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1},
-    {1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1},
-    {1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1}};
-uint8_t maze_map2[10][15] = {
-    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1},
-    {1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
-    {1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
-uint8_t maze_map3[10][15] = {
-    {0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0},
-    {1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
-    {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1},
-    {1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1}};
-uint8_t maze_map4[10][15] = {
-    {0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1},
-    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1},
-    {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
-    {1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0},
-    {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1},
-    {1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1}};
-uint8_t maze_map5[10][15] = {
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-    {1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1},
-    {1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1},
-    {1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1},
-    {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
-    {1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1},
-    {1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1},
-    {1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1}};
+// uint8_t maze_map1[10][15] = {
+//     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+//     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+//     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+//     {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+//     {1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1},
+//     {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1},
+//     {1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+//     {1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1},
+//     {1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1},
+//     {1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1}};
+// uint8_t maze_map2[10][15] = {
+//     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+//     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+//     {1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1},
+//     {1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1},
+//     {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1},
+//     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+//     {1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1},
+//     {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1},
+//     {1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+//     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+// uint8_t maze_map3[10][15] = {
+//     {0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0},
+//     {1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1},
+//     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+//     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+//     {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+//     {1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1},
+//     {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+//     {1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+//     {1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1},
+//     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1}};
+// uint8_t maze_map4[10][15] = {
+//     {0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+//     {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1},
+//     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1},
+//     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1},
+//     {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+//     {1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0},
+//     {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1},
+//     {1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1},
+//     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1},
+//     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1}};
+// uint8_t maze_map5[10][15] = {
+//     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+//     {1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1},
+//     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1},
+//     {1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1},
+//     {1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1},
+//     {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+//     {1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+//     {1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1},
+//     {1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 0, 1},
+//     {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1}};
 
-uint8_t maze_maps[5][10][15] = {maze_map1, maze_map2, maze_map3, maze_map4, maze_map5};
+uint8_t maze_maps[5][10][15] = {
+    {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+     {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+     {1, 2, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1},
+     {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1},
+     {1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+     {1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1},
+     {1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1},
+     {1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1}},
+
+    {{1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+     {1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1},
+     {1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1},
+     {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1},
+     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+     {1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1},
+     {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1},
+     {1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}},
+
+    {{0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0},
+     {1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1},
+     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+     {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+     {1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1},
+     {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+     {1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+     {1, 0, 2, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1},
+     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1}},
+
+    {{0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0},
+     {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1},
+     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1},
+     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1},
+     {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+     {1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0},
+     {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1},
+     {1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1},
+     {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1},
+     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1}},
+
+    {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+     {1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1},
+     {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1},
+     {1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 2, 0, 1, 0, 1},
+     {1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1},
+     {1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+     {1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+     {1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1},
+     {1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 0, 1},
+     {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1}}};
+
+// uint8_t maze_maps[5][10][15] = {maze_map1, maze_map2, maze_map3, maze_map4, maze_map5};
 // end map
 
 // End Global Variable
@@ -202,9 +259,9 @@ void setup()
   mpu.calibrateMPU9250(mpu.gyroBias, mpu.accelBias); // calibrate gyro-sensor valu
   delay(1000);
   pixels.begin();
-  // wifi_connect();
-  // firebase_connect();
-  // send_default_status();
+  wifi_connect();
+  firebase_connect();
+  send_default_status();
   note_duration = millis(); // prepare to start music
   screen_time = millis();
 }
@@ -213,23 +270,26 @@ void loop()
 {
   M5.update();
   BG.update(); // Update speaker
-  play_bg_music();
-  if (status == "WAIT")
+  while (status == "WAIT")
   {
     waiting_page();
   }
-  else if (status == "CONNECTED")
+  while (status == "CONNECTED" || play_state == 0)
   {
     select_map_page();
   }
-  else if (status == "PLAY")
+  if (status == "PLAY")
   {
-    BG.end();
-    draw_maze_map();
+    MAP.clear();
+    draw_maze_map(map_number - 1);
+    playerPos.x = 160;
+    playerPos.y = 120;
+    note_index = 0;
     PLAYER.fillCircle((int)playerPos.x, (int)playerPos.y, player_radius, WHITE);
-    while (1)
+    BG.begin();
+    while (play_state)
     {
-
+      play_bg_music();
       if (millis() - prev_time >= 16) // read gyro every 16 ms => 60Hz
       {
         read_gyro();  // read x and y  axis on gyro-sensor
@@ -237,6 +297,11 @@ void loop()
         prev_time = millis();
       }
     }
+    MAP.clear();
+    SCREEN.drawString("Good job!", 120, 100, 2);
+    status = "CONNECTED";
+    send_default_status();
+    BG.end();
   }
 }
 // sensor read
@@ -321,25 +386,45 @@ int isCollision()
   for (int i = 0; i <= player_radius; i++) // the player is circle but we check around it by squre
   {
     // right collision
-    if (PLAYER.readPixel((int)(playerPos.x + (player_radius + 1)), (int)playerPos.y + i) == 0x99E2)
+    if (PLAYER.readPixel((int)(playerPos.x + (player_radius + playerSpeed.x)), (int)playerPos.y + i) == 0x99E2)
       return 1;
-    if (PLAYER.readPixel((int)(playerPos.x + (player_radius + 1)), (int)playerPos.y - i) == 0x99E2)
+    if (PLAYER.readPixel((int)(playerPos.x + (player_radius + playerSpeed.x)), (int)playerPos.y - i) == 0x99E2)
       return 1;
     // left collision
-    if (PLAYER.readPixel((int)(playerPos.x - (player_radius + 1)) - playerSpeed.x, (int)playerPos.y + i) == 0x99E2)
+    if (PLAYER.readPixel((int)(playerPos.x - (player_radius + playerSpeed.x)) - playerSpeed.x, (int)playerPos.y + i) == 0x99E2)
       return 2;
-    if (PLAYER.readPixel(((int)playerPos.x - (player_radius + 1)) - playerSpeed.x, (int)playerPos.y - i) == 0x99E2)
+    if (PLAYER.readPixel(((int)playerPos.x - (player_radius + playerSpeed.x)) - playerSpeed.x, (int)playerPos.y - i) == 0x99E2)
       return 2;
     // down collision
-    if (PLAYER.readPixel((int)playerPos.x + i, ((int)playerPos.y + (player_radius + 1))) == 0x99E2)
+    if (PLAYER.readPixel((int)playerPos.x + i, ((int)playerPos.y + (player_radius + playerSpeed.x))) == 0x99E2)
       return 3;
-    if (PLAYER.readPixel((int)playerPos.x - i, ((int)playerPos.y + (player_radius + 1))) == 0x99E2)
+    if (PLAYER.readPixel((int)playerPos.x - i, ((int)playerPos.y + (player_radius + playerSpeed.x))) == 0x99E2)
       return 3;
     // up collision
-    if (PLAYER.readPixel((int)playerPos.x + i, ((int)playerPos.y - (player_radius + 1))) == 0x99E2)
+    if (PLAYER.readPixel((int)playerPos.x + i, ((int)playerPos.y - (player_radius + playerSpeed.x))) == 0x99E2)
       return 4;
-    if (PLAYER.readPixel((int)playerPos.x - i, ((int)playerPos.y - (player_radius + 1))) == 0x99E2)
+    if (PLAYER.readPixel((int)playerPos.x - i, ((int)playerPos.y - (player_radius + playerSpeed.x))) == 0x99E2)
       return 4;
+
+    if (PLAYER.readPixel((int)(playerPos.x + (player_radius + playerSpeed.x)), (int)playerPos.y + i) == GREEN)
+      play_state = 0;
+    else if (PLAYER.readPixel((int)(playerPos.x + (player_radius + playerSpeed.x)), (int)playerPos.y - i) == GREEN)
+      play_state = 0;
+    // left collision
+    else if (PLAYER.readPixel((int)(playerPos.x - (player_radius + playerSpeed.x)) - playerSpeed.x, (int)playerPos.y + i) == GREEN)
+      play_state = 0;
+    else if (PLAYER.readPixel(((int)playerPos.x - (player_radius + playerSpeed.x)) - playerSpeed.x, (int)playerPos.y - i) == GREEN)
+      play_state = 0;
+    // down collision
+    else if (PLAYER.readPixel((int)playerPos.x + i, ((int)playerPos.y + (player_radius + playerSpeed.x))) == GREEN)
+      play_state = 0;
+    else if (PLAYER.readPixel((int)playerPos.x - i, ((int)playerPos.y + (player_radius + playerSpeed.x))) == GREEN)
+      play_state = 0;
+    // up collision
+    else if (PLAYER.readPixel((int)playerPos.x + i, ((int)playerPos.y - (player_radius + playerSpeed.x))) == GREEN)
+      play_state = 0;
+    else if (PLAYER.readPixel((int)playerPos.x - i, ((int)playerPos.y - (player_radius + playerSpeed.x))) == GREEN)
+      play_state = 0;
   }
   return 0; // not collision
 }
@@ -434,9 +519,17 @@ void play_bg_music()
 void waiting_page()
 {
   String str = "Connecting";
-  if (millis() - screen_time >= 400)
+  if (millis() - screen_time >= 100)
   {
     SCREEN.drawString(str, 120, 100, 2);
+    if (Firebase.getString(fbdo, "/MAZE-GAME-Device/status"))
+    {
+      status = fbdo.stringData();
+    }
+    else
+    {
+      Serial.println("Error : " + fbdo.errorReason());
+    }
     screen_time = millis();
     if (point < 3)
     {
@@ -454,6 +547,15 @@ void waiting_page()
 void select_map_page()
 {
   String str = "Selecte map";
+  if (Firebase.getString(fbdo, "/MAZE-GAME-Device/status"))
+  {
+    status = fbdo.stringData();
+  }
+  if (Firebase.getString(fbdo, "/MAZE-GAME-Device/map"))
+  {
+    map_number = fbdo.intData();
+    play_state = 1;
+  }
   if (millis() - screen_time >= 400)
   {
     SCREEN.drawString(str, 120, 100, 2);
@@ -530,14 +632,16 @@ void send_default_status()
   }
 }
 
-void draw_maze_map()
+void draw_maze_map(uint8_t index)
 {
 
   for (int y = 0; y < 10; y++)
   {
     for (int x = 0; x < 15; x++)
     {
-      if (maze_map2[y][x])
+      if (maze_maps[index][y][x] == 2)
+        MAP.fillRect(x * 21, y * 23, 10, 10, GREEN);
+      if (maze_maps[index][y][x] == 1)
         drawShelf(x, y);
     }
   }
